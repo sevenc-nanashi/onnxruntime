@@ -21,10 +21,6 @@
 
 namespace onnxruntime {
 
-namespace ConstValue {
-constexpr int32_t mag_factor = 1 << (22 - 1);
-}
-
 namespace {
 const uint8_t* GetLookupTableShared() {
   // initialized once
@@ -57,8 +53,8 @@ struct FilterParamsBaseAntiAlias {
 
 template <typename T>
 struct FilterParamsAntiAlias {
-  float support_size = 2.0f;
-  float cubic_coeff_a = -0.75f;
+  float support_size = kSupportSize;
+  float cubic_coeff_a = kCubicCoeffA;
 
   FilterParamsBaseAntiAlias<T> dim_x;
   FilterParamsBaseAntiAlias<T> dim_y;
@@ -89,7 +85,7 @@ struct BilinearParamsAntiAlias : FilterParamsAntiAlias<T> {
 template <typename T>
 struct BiCubicParamsAntiAlias : FilterParamsAntiAlias<T> {
   BiCubicParamsAntiAlias() {
-    this->support_size = 4.0f;
+    this->support_size = kBiCubicSupportSize;
   }
 
   // taken from
@@ -124,27 +120,6 @@ struct TriLinearParamsAntiAlias : FilterParamsAntiAlias<T> {
   }
 };
 
-template <typename T>
-struct AccumulateType {
-  using type = int32_t;
-  using Dtype = T;
-};
-
-template <>
-struct AccumulateType<int32_t> {
-  using type = float;
-};
-
-template <>
-struct AccumulateType<float> {
-  using type = float;
-};
-
-template <>
-struct AccumulateType<double> {
-  using type = double;
-};
-
 // The following method supports a 3/4/5-D input in 'Linear mode, cubic mode'
 // that amounts to 'Bilinear,TriLinear, Bicubic/Tricubic' Upsampling/Resizing in the sense that it assumes
 // A N-D tensor has
@@ -156,19 +131,19 @@ struct AccumulateType<double> {
 // - [N, H, W, C] and the scales are [1.0, height_scale, width_scale, 1.0]
 template <class T>
 void SetupUpsampleFilterAntiAlias(FilterParamsAntiAlias<T>& p,
-                                  const gsl::span<int64_t> input_h_w_c,
-                                  const gsl::span<int64_t> output_h_w_c,
-                                  const gsl::span<float> scale_h_w_c,
-                                  const std::vector<float>& roi,
+                                  gsl::span<int64_t> input_h_w_c,
+                                  gsl::span<int64_t> output_h_w_c,
+                                  gsl::span<float> scale_h_w_c,
+                                  gsl::span<const float> roi,
                                   AllocatorPtr& alloc,
                                   const GetOriginalCoordinateFunc& get_original_coordinate,
                                   bool exclude_outside, const bool is_nchw) {
-  auto compute_weight_coefficients = [&alloc, &roi, &get_original_coordinate, exclude_outside](const FilterParamsAntiAlias<T>& p,
-                                                                                               const int64_t input_size,
-                                                                                               const int64_t output_size,
-                                                                                               size_t rindex,
-                                                                                               FilterParamsBaseAntiAlias<T>& param_base,
-                                                                                               const float rscale) -> int64_t {
+  auto compute_weight_coefficients = [&alloc, roi, &get_original_coordinate, exclude_outside](const FilterParamsAntiAlias<T>& p,
+                                                                                              const int64_t input_size,
+                                                                                              const int64_t output_size,
+                                                                                              size_t rindex,
+                                                                                              FilterParamsBaseAntiAlias<T>& param_base,
+                                                                                              const float rscale) -> int64_t {
     param_base.bound.reserve(static_cast<size_t>(output_size) * 2);
     param_base.out_of_bound_idx.reserve(static_cast<size_t>(output_size));
 
@@ -252,6 +227,10 @@ void SetupUpsampleFilterAntiAlias(FilterParamsAntiAlias<T>& p,
         scale_buffer[x] = 0;
       }*/
     }
+
+    PrintAntiAliasBuffers(std::cout, param_base.bound, param_base.out_of_bound_idx,
+                          gsl::make_span(param_base.weight_coefficients.get(), scale_buffer_size));
+
     return window_size;
   };
 
@@ -546,7 +525,7 @@ void UpsampleBilinearAntiAlias(const int64_t batch_size,
                                const int64_t output_width,
                                const float height_scale,
                                const float width_scale,
-                               const std::vector<float>& roi,
+                               gsl::span<const float> roi,
                                const bool use_extrapolation,
                                const float extrapolation_value,
                                bool exclude_outside,
@@ -575,7 +554,7 @@ void NhwcUpsampleBilinearAntiAlias(const int64_t batch_size,
                                    const int64_t output_width,
                                    const float height_scale,
                                    const float width_scale,
-                                   const std::vector<float>& roi,
+                                   gsl::span<const float> roi,
                                    const bool use_extrapolation,
                                    const float extrapolation_value,
                                    bool exclude_outside,
@@ -608,7 +587,7 @@ void NhwcResizeBiCubicAntiAlias(const int64_t batch_size,
                                 bool use_extrapolation,
                                 float extrapolation_value,
                                 bool exclude_outside,
-                                const std::vector<float>& roi,
+                                gsl::span<const float> roi,
                                 const Tensor* X,
                                 T* Ydata_base,
                                 AllocatorPtr& alloc,
@@ -688,7 +667,7 @@ void ResizeBiCubicAntiAlias(int64_t batch_size,
                             bool use_extrapolation,
                             float extrapolation_value,
                             bool exclude_outside,
-                            const std::vector<float>& roi,
+                            gsl::span<const float> roi,
                             const Tensor* X,
                             T* Ydata_base,
                             AllocatorPtr& alloc,
@@ -719,7 +698,7 @@ void UpsampleTrilinearAntiAlias(int64_t batch_size,
                                 float depth_scale,
                                 float height_scale,
                                 float width_scale,
-                                const std::vector<float>& roi,
+                                gsl::span<const float> roi,
                                 bool use_extrapolation,
                                 float extrapolation_value,
                                 bool exclude_outside,
