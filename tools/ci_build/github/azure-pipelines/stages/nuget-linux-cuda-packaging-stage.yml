@@ -22,7 +22,7 @@ stages:
     workspace:
       clean: all
     timeoutInMinutes: 150
-    pool: 'Onnxruntime-Linux-GPU-A10'
+    pool: 'Onnxruntime-Linux-GPU'
     variables:
       - name: CUDA_VERSION_MAJOR
         ${{ if eq(parameters.CudaVersion, '11.8') }}:
