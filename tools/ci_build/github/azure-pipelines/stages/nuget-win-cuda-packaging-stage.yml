@@ -27,7 +27,7 @@ stages:
 # Windows CUDA without TensorRT Packaging
 - template: ../templates/win-ci.yml
   parameters:
-    ort_build_pool_name: 'onnxruntime-Win2022-GPU-T4'
+    ort_build_pool_name: 'onnxruntime-Win2022-GPU-A10'
     DoCompliance: ${{ parameters.DoCompliance }}
     DoEsrp: ${{ parameters.DoEsrp }}
     stage_name_suffix: gpu
@@ -35,7 +35,7 @@ stages:
     msbuildPlatform: x64
     packageName: x64-cuda
     CudaVersion: ${{ parameters.CudaVersion }}
-    buildparameter: --use_cuda --cuda_home=${{ parameters.win_cuda_home }} --enable_onnx_tests --enable_wcos --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80"
+    buildparameter: --use_cuda --cuda_home=${{ parameters.win_cuda_home }} --enable_onnx_tests --enable_wcos --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86"
     runTests: ${{ parameters.RunOnnxRuntimeTests }}
     buildJava: false
     java_artifact_id: onnxruntime_gpu
@@ -43,7 +43,7 @@ stages:
 # Windows CUDA with TensorRT Packaging
 - template: ../templates/win-ci.yml
   parameters:
-    ort_build_pool_name: 'onnxruntime-Win2022-GPU-T4'
+    ort_build_pool_name: 'onnxruntime-Win2022-GPU-A10'
     DoCompliance: ${{ parameters.DoCompliance }}
     DoEsrp: ${{ parameters.DoEsrp }}
     stage_name_suffix: tensorrt
@@ -51,7 +51,7 @@ stages:
     msbuildPlatform: x64
     CudaVersion: ${{ parameters.CudaVersion }}
     packageName: x64-tensorrt
-    buildparameter: --use_tensorrt --tensorrt_home=${{ parameters.win_trt_home }} --cuda_home=${{ parameters.win_cuda_home }}  --enable_onnx_tests --enable_wcos --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80"
+    buildparameter: --use_tensorrt --tensorrt_home=${{ parameters.win_trt_home }} --cuda_home=${{ parameters.win_cuda_home }}  --enable_onnx_tests --enable_wcos --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86"
     runTests: ${{ parameters.RunOnnxRuntimeTests }}
     buildJava: false
     java_artifact_id: onnxruntime_gpu

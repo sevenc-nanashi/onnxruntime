@@ -22,7 +22,7 @@ stages:
     workspace:
       clean: all
     timeoutInMinutes: 150
-    pool: 'Onnxruntime-Linux-GPU'
+    pool: 'Onnxruntime-Linux-GPU-A10'
     variables:
       - name: CUDA_VERSION_MAJOR
         ${{ if eq(parameters.CudaVersion, '11.8') }}:
@@ -87,7 +87,7 @@ stages:
     - job:
       workspace:
         clean: all
-      pool: 'Onnxruntime-Linux-GPU'
+      pool: 'Onnxruntime-Linux-GPU-A10'
 
       steps:
         - checkout: self                           # due to checkout multiple repos, the root directory is $(Build.SourcesDirectory)/onnxruntime
