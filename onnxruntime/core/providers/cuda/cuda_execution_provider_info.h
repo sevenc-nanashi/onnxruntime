@@ -7,7 +7,6 @@
 #include <functional>
 #include <limits>
 
-#include "core/common/hash_combine.h"
 #include "core/framework/arena_extend_strategy.h"
 #include "core/framework/ortdevice.h"
 #include "core/framework/provider_options.h"
@@ -79,16 +78,6 @@ struct CUDAExecutionProviderInfo {
   static CUDAExecutionProviderInfo FromProviderOptions(const ProviderOptions& options);
   static ProviderOptions ToProviderOptions(const CUDAExecutionProviderInfo& info);
   static ProviderOptions ToProviderOptions(const OrtCUDAProviderOptionsV2& info);
+  static size_t ToHash(const CUDAExecutionProviderInfo& info);
 };
 }  // namespace onnxruntime
-
-template <>
-struct std::hash<::onnxruntime::cuda::TunableOpInfo> {
-  size_t operator()(const ::onnxruntime::cuda::TunableOpInfo& info) const {
-    size_t seed_and_value{0xbc9f1d34};
-    onnxruntime::HashCombine(info.enable, seed_and_value);
-    onnxruntime::HashCombine(info.tuning_enable, seed_and_value);
-    onnxruntime::HashCombine(info.max_tuning_duration_ms, seed_and_value);
-    return seed_and_value;
-  }
-};

@@ -10,6 +10,7 @@
 #include "core/common/parse_string.h"
 #include "core/framework/provider_options_utils.h"
 #include "core/providers/cuda/cuda_common.h"
+#include "core/common/hash_combine.h"
 
 namespace onnxruntime {
 namespace cuda {
@@ -31,8 +32,9 @@ constexpr const char* kTunableOpEnable = "tunable_op_enable";
 constexpr const char* kTunableOpTuningEnable = "tunable_op_tuning_enable";
 constexpr const char* kTunableOpMaxTuningDurationMs = "tunable_op_max_tuning_duration_ms";
 constexpr const char* kEnableSkipLayerNormStrictMode = "enable_skip_layer_norm_strict_mode";
-constexpr const char* kPreferNCHWMode = "prefer_nhwc";
-constexpr const char* KUseEPLevelUnifiedStream = "use_ep_level_unified_stream";
+constexpr const char* kPreferNHWCMode = "prefer_nhwc";
+constexpr const char* kUseEPLevelUnifiedStream = "use_ep_level_unified_stream";
+
 }  // namespace provider_option_names
 }  // namespace cuda
 
@@ -112,8 +114,8 @@ CUDAExecutionProviderInfo CUDAExecutionProviderInfo::FromProviderOptions(const P
           .AddAssignmentToReference(cuda::provider_option_names::kEnableCudaGraph, info.enable_cuda_graph)
           .AddAssignmentToReference(cuda::provider_option_names::kCudnnConv1dPadToNc1d, info.cudnn_conv1d_pad_to_nc1d)
           .AddAssignmentToReference(cuda::provider_option_names::kEnableSkipLayerNormStrictMode, info.enable_skip_layer_norm_strict_mode)
-          .AddAssignmentToReference(cuda::provider_option_names::kPreferNCHWMode, info.prefer_nhwc)
-          .AddAssignmentToReference(cuda::provider_option_names::KUseEPLevelUnifiedStream, info.use_ep_level_unified_stream)
+          .AddAssignmentToReference(cuda::provider_option_names::kPreferNHWCMode, info.prefer_nhwc)
+          .AddAssignmentToReference(cuda::provider_option_names::kUseEPLevelUnifiedStream, info.use_ep_level_unified_stream)
           .AddValueParser(
               cuda::provider_option_names::kTunableOpEnable,
               [&info](const std::string& value_str) -> Status {
@@ -164,8 +166,8 @@ ProviderOptions CUDAExecutionProviderInfo::ToProviderOptions(const CUDAExecution
       {cuda::provider_option_names::kTunableOpTuningEnable, MakeStringWithClassicLocale(info.tunable_op.tuning_enable)},
       {cuda::provider_option_names::kTunableOpMaxTuningDurationMs, MakeStringWithClassicLocale(info.tunable_op.max_tuning_duration_ms)},
       {cuda::provider_option_names::kEnableSkipLayerNormStrictMode, MakeStringWithClassicLocale(info.enable_skip_layer_norm_strict_mode)},
-      {cuda::provider_option_names::kPreferNCHWMode, MakeStringWithClassicLocale(info.prefer_nhwc)},
-      {cuda::provider_option_names::KUseEPLevelUnifiedStream, MakeStringWithClassicLocale(info.use_ep_level_unified_stream)},
+      {cuda::provider_option_names::kPreferNHWCMode, MakeStringWithClassicLocale(info.prefer_nhwc)},
+      {cuda::provider_option_names::kUseEPLevelUnifiedStream, MakeStringWithClassicLocale(info.use_ep_level_unified_stream)},
   };
 
   return options;
@@ -185,11 +187,43 @@ ProviderOptions CUDAExecutionProviderInfo::ToProviderOptions(const OrtCUDAProvid
       {cuda::provider_option_names::kTunableOpEnable, MakeStringWithClassicLocale(info.tunable_op_enable)},
       {cuda::provider_option_names::kTunableOpTuningEnable, MakeStringWithClassicLocale(info.tunable_op_tuning_enable)},
       {cuda::provider_option_names::kTunableOpMaxTuningDurationMs, MakeStringWithClassicLocale(info.tunable_op_max_tuning_duration_ms)},
-      {cuda::provider_option_names::kPreferNCHWMode, MakeStringWithClassicLocale(info.prefer_nhwc)},
-      {cuda::provider_option_names::KUseEPLevelUnifiedStream, MakeStringWithClassicLocale(info.use_ep_level_unified_stream)},
+      {cuda::provider_option_names::kPreferNHWCMode, MakeStringWithClassicLocale(info.prefer_nhwc)},
+      {cuda::provider_option_names::kUseEPLevelUnifiedStream, MakeStringWithClassicLocale(info.use_ep_level_unified_stream)},
   };
 
   return options;
+}
+
+size_t CUDAExecutionProviderInfo::ToHash(const CUDAExecutionProviderInfo& info) {
+  size_t value{0xbc9f1d34};  // seed
+
+  // Bits: device_id (16), arena_extend_strategy/cudnn_conv_algo_search (reserved 2), boolean options (1 each)
+  size_t data = static_cast<size_t>(info.device_id) ^
+                (static_cast<size_t>(info.arena_extend_strategy) << 16) ^
+                (static_cast<size_t>(info.cudnn_conv_algo_search) << 18) ^
+                (static_cast<size_t>(info.do_copy_in_default_stream) << 20) ^
+                (static_cast<size_t>(info.has_user_compute_stream) << 21) ^
+                (static_cast<size_t>(info.cudnn_conv_use_max_workspace) << 22) ^
+                (static_cast<size_t>(info.enable_cuda_graph) << 23) ^
+                (static_cast<size_t>(info.tunable_op.enable) << 24) ^
+                (static_cast<size_t>(info.tunable_op.tuning_enable) << 25) ^
+                (static_cast<size_t>(info.cudnn_conv1d_pad_to_nc1d) << 26) ^
+                (static_cast<size_t>(info.enable_skip_layer_norm_strict_mode) << 27) ^
+                (static_cast<size_t>(info.prefer_nhwc) << 28) ^
+                (static_cast<size_t>(info.use_ep_level_unified_stream) << 29);
+  HashCombine(data, value);
+
+  HashCombine(info.gpu_mem_limit, value);
+  HashCombine(info.tunable_op.max_tuning_duration_ms, value);
+
+  // Memory pointers
+  HashCombine(reinterpret_cast<size_t>(info.user_compute_stream), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.alloc), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.free), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.empty_cache), value);
+
+  // The default memory arena cfg is not used in hashing right now.
+  return value;
 }
 
 }  // namespace onnxruntime
