@@ -10,6 +10,7 @@
 #include "core/common/parse_string.h"
 #include "core/framework/provider_options_utils.h"
 #include "core/providers/cuda/cuda_common.h"
+#include "core/common/hash_combine.h"
 
 namespace onnxruntime {
 namespace cuda {
@@ -34,7 +35,6 @@ constexpr const char* kEnableSkipLayerNormStrictMode = "enable_skip_layer_norm_s
 constexpr const char* kPreferNHWCMode = "prefer_nhwc";
 constexpr const char* kUseEPLevelUnifiedStream = "use_ep_level_unified_stream";
 constexpr const char* kUseTF32 = "use_tf32";
-
 }  // namespace provider_option_names
 }  // namespace cuda
 
@@ -195,6 +195,38 @@ ProviderOptions CUDAExecutionProviderInfo::ToProviderOptions(const OrtCUDAProvid
   };
 
   return options;
+}
+
+size_t CUDAExecutionProviderInfo::ToHash(const CUDAExecutionProviderInfo& info) {
+  size_t value{0xbc9f1d34};  // seed
+
+  // Bits: device_id (16), arena_extend_strategy/cudnn_conv_algo_search (reserved 2), boolean options (1 each)
+  size_t data = static_cast<size_t>(info.device_id) ^
+                (static_cast<size_t>(info.arena_extend_strategy) << 16) ^
+                (static_cast<size_t>(info.cudnn_conv_algo_search) << 18) ^
+                (static_cast<size_t>(info.do_copy_in_default_stream) << 20) ^
+                (static_cast<size_t>(info.has_user_compute_stream) << 21) ^
+                (static_cast<size_t>(info.cudnn_conv_use_max_workspace) << 22) ^
+                (static_cast<size_t>(info.enable_cuda_graph) << 23) ^
+                (static_cast<size_t>(info.tunable_op.enable) << 24) ^
+                (static_cast<size_t>(info.tunable_op.tuning_enable) << 25) ^
+                (static_cast<size_t>(info.cudnn_conv1d_pad_to_nc1d) << 26) ^
+                (static_cast<size_t>(info.enable_skip_layer_norm_strict_mode) << 27) ^
+                (static_cast<size_t>(info.prefer_nhwc) << 28) ^
+                (static_cast<size_t>(info.use_ep_level_unified_stream) << 29);
+  HashCombine(data, value);
+
+  HashCombine(info.gpu_mem_limit, value);
+  HashCombine(info.tunable_op.max_tuning_duration_ms, value);
+
+  // Memory pointers
+  HashCombine(reinterpret_cast<size_t>(info.user_compute_stream), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.alloc), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.free), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.empty_cache), value);
+
+  // The default memory arena cfg is not used in hashing right now.
+  return value;
 }
 
 }  // namespace onnxruntime

@@ -8,6 +8,7 @@
 #include "core/common/parse_string.h"
 #include "core/framework/provider_options_utils.h"
 #include "core/providers/rocm/rocm_common.h"
+#include "core/common/hash_combine.h"
 
 namespace onnxruntime {
 namespace rocm {
@@ -145,6 +146,34 @@ ProviderOptions ROCMExecutionProviderInfo::ToProviderOptions(const OrtROCMProvid
   };
 
   return options;
+}
+
+size_t ROCMExecutionProviderInfo::ToHash(const ROCMExecutionProviderInfo& info) {
+  size_t value{0xbc9f1d34};  // seed
+
+  // Bits: device_id (16), arena_extend_strategy/miopen_conv_exhaustive_search (reserved 2), boolean options (1 each)
+  size_t data = static_cast<size_t>(info.device_id) ^
+                (static_cast<size_t>(info.arena_extend_strategy) << 16) ^
+                (static_cast<size_t>(info.miopen_conv_exhaustive_search) << 18) ^
+                (static_cast<size_t>(info.do_copy_in_default_stream) << 20) ^
+                (static_cast<size_t>(info.has_user_compute_stream) << 21) ^
+                (static_cast<size_t>(info.miopen_conv_use_max_workspace) << 22) ^
+                (static_cast<size_t>(info.enable_hip_graph) << 23) ^
+                (static_cast<size_t>(info.tunable_op.enable) << 24) ^
+                (static_cast<size_t>(info.tunable_op.tuning_enable) << 25);
+  HashCombine(data, value);
+
+  HashCombine(info.gpu_mem_limit, value);
+  HashCombine(info.tunable_op.max_tuning_duration_ms, value);
+
+  // Memory pointers
+  HashCombine(reinterpret_cast<size_t>(info.user_compute_stream), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.alloc), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.free), value);
+  HashCombine(reinterpret_cast<size_t>(info.external_allocator_info.empty_cache), value);
+
+  // The default memory arena cfg is not used in hashing right now.
+  return value;
 }
 
 }  // namespace onnxruntime
